@@ -3,209 +3,769 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DRISHTI — NOC</title>
+<title>DRISHTI — Predictive NOC Copilot</title>
+<meta name="description" content="DRISHTI — Predictive NOC Copilot for Secure MPLS/SD-WAN Operations. Real-time failure detection, root cause analysis, and AI-powered incident explanation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* Dark NOC theme by default; light via prefers-color-scheme. Palette values are
-     the dataviz reference instance (validated); status colors are always paired
-     with a text label, never color-alone. */
-  :root {
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #232321;
-    --ink: #ffffff;
-    --ink-2: #c3c2b7;
-    --muted: #898781;
-    --hair: #2c2c2a;
-    --seq: #3987e5;          /* sequential blue — magnitude (probability) */
-    --ok: #0ca30c;
-    --info: #3987e5;
-    --warning: #fab219;
-    --error: #ec835a;        /* status "serious" */
-    --critical: #d03b3b;
-    --ring: #ffffff;
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec;
-      --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781; --hair: #e1e0d9;
-      --seq: #2a78d6; --ok: #0ca30c; --info: #2a78d6; --warning: #fab219;
-      --error: #ec835a; --critical: #d03b3b; --ring: #0b0b0b;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--page); color: var(--ink);
-    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  }
-  header {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--hair);
-    position: sticky; top: 0; z-index: 5;
-  }
-  header h1 { font-size: 16px; margin: 0; letter-spacing: 0.5px; }
-  header h1 span { color: var(--muted); font-weight: 400; }
-  .health { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
-  .svc { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-  .dot.up { background: var(--ok); }
-  .dot.down { background: var(--critical); }
-  .cfg { font-size: 11px; color: var(--muted); padding: 6px 20px; background: var(--page); }
-  main {
-    display: grid; gap: 16px; padding: 16px 20px;
-    grid-template-columns: repeat(12, 1fr);
-  }
-  .panel {
-    background: var(--surface); border: 1px solid var(--hair); border-radius: 10px;
-    padding: 14px; min-height: 80px; overflow: hidden;
-  }
-  .panel > h2 {
-    font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px;
-    color: var(--muted); margin: 0 0 12px;
-  }
-  #topology-panel { grid-column: span 7; }
-  #predictions-panel { grid-column: span 5; }
-  #incidents-panel { grid-column: span 7; }
-  #copilot-panel { grid-column: span 5; }
-  #events-panel { grid-column: span 12; }
-  @media (max-width: 900px) { main > .panel { grid-column: 1 / -1 !important; } }
+/* ═══════════════════════════════════════════════════════════════════════════
+   DRISHTI NOC DASHBOARD — Network & WAN Failure Detection Theme
+   Deep-space dark palette · cyan/teal accents · glassmorphism · micro-anims
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-  svg { width: 100%; height: auto; display: block; }
-  .node-label { fill: var(--ink-2); font-size: 9px; }
-  .empty { color: var(--muted); font-style: italic; }
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --page:       #0b0f19;
+  --surface:    rgba(15, 23, 42, 0.78);
+  --surface-2:  rgba(30, 41, 59, 0.68);
+  --glass-border: rgba(99, 102, 241, 0.16);
+  --glass-glow:  rgba(99, 102, 241, 0.05);
+  --ink:        #f1f5f9;
+  --ink-2:      #94a3b8;
+  --muted:      #64748b;
+  --hair:       rgba(148, 163, 184, 0.12);
 
-  /* prediction tiles */
-  .tiles { display: grid; gap: 8px; }
-  .tile { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; }
-  .tile .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .tile .name { font-weight: 600; }
-  .tile .iface { color: var(--muted); font-size: 12px; }
-  .tile .eta { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 12px; }
-  .meter { height: 8px; background: var(--hair); border-radius: 4px; margin-top: 6px; overflow: hidden; }
-  .meter > i { display: block; height: 100%; background: var(--seq); border-radius: 4px; }
+  --accent:     #6366f1;   /* NOC indigo accent */
+  --accent-dim: #4f46e5;   /* indigo-600 */
+  --cobalt:     #3b82f6;   /* telemetry cobalt blue */
+  --emerald:    #10b981;   /* operational status emerald */
+  --ok:         #10b981;
+  --info:       #3b82f6;
+  --warning:    #f59e0b;
+  --error:      #f97316;
+  --critical:   #ef4444;
 
-  /* severity chip / dot — always with a text label */
-  .chip {
-    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 20px;
-    background: var(--surface-2); color: var(--ink);
-  }
-  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .chip.ok::before { background: var(--ok); }
-  .chip.info::before { background: var(--info); }
-  .chip.warning::before { background: var(--warning); }
-  .chip.error::before { background: var(--error); }
-  .chip.critical::before { background: var(--critical); }
+  --font-body:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:  'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --radius:     14px;
+  --radius-sm:  8px;
+}
 
-  /* incident cards */
-  .card { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-  .card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .card .rc { font-weight: 600; }
-  .card .rc b { color: var(--critical); }
-  .card ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); }
-  .card .rationale { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
-  .card .cascade li { font-size: 12px; }
-  button {
-    font: inherit; font-size: 12px; cursor: pointer; margin-top: 8px;
-    background: var(--seq); color: #fff; border: none; border-radius: 6px; padding: 5px 12px;
-  }
-  button:disabled { opacity: 0.6; cursor: default; }
+/* ── Reset & base ───────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  #copilot-out { white-space: pre-wrap; font-size: 13px; color: var(--ink); }
-  #copilot-meta { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+html { scroll-behavior: smooth; }
 
-  /* event ticker */
-  #events { max-height: 240px; overflow-y: auto; }
-  .ev { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--hair); font-size: 12px; }
-  .ev .evdot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; margin-top: 5px; background: var(--muted); }
-  .ev .evdot.info { background: var(--info); }
-  .ev .evdot.warning { background: var(--warning); }
-  .ev .evdot.error { background: var(--error); }
-  .ev .evdot.critical { background: var(--critical); }
-  .ev .ts { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
-  .ev .node { color: var(--ink-2); font-weight: 600; flex: 0 0 auto; }
-  .ev .msg { color: var(--ink-2); }
-  #inject-panel { grid-column: span 12; }
-  .inject { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .inject select {
-    font: inherit; padding: 7px 10px; border-radius: 8px;
-    border: 1px solid var(--hair); background: var(--surface-2); color: var(--ink);
-  }
-  .inject button { margin-top: 0; padding: 8px 14px; border-radius: 8px; font-size: 13px; }
-  .inject button.secondary { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--hair); }
-  .inject button:disabled { opacity: 0.55; cursor: default; }
-  .hint { color: var(--muted); font-size: 12px; }
-  #active-faults { margin: 10px 0 4px; font-size: 12px; }
-  #active-faults .fault { color: var(--ink-2); }
-  #active-faults .fault b { color: var(--warning); }
-  .tile .row { display: flex; align-items: center; gap: 8px; }
-  .tile .meter { flex: 1; }
-  svg.spark { flex: 0 0 auto; }
-  .eta-badge {
-    margin-left: auto; font-size: 11px; font-weight: 600; white-space: nowrap;
-    color: var(--warning); border: 1px solid var(--warning); border-radius: 999px; padding: 1px 8px;
-  }
-  h2 .toggle { float: right; font-size: 11px; font-weight: 400; color: var(--ink-2); cursor: pointer; }
-  h2 .toggle input { vertical-align: middle; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Animated network canvas (behind everything) ────────────────────────── */
+#net-bg {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.18); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(56,189,248,0.35); }
+
+/* ── Glassmorphism panel ────────────────────────────────────────────────── */
+.panel {
+  position: relative;
+  background: var(--surface);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  min-height: 90px;
+  overflow: hidden;
+  transition: border-color 0.4s, box-shadow 0.4s;
+  animation: panelIn 0.6s ease-out both;
+}
+.panel:hover {
+  border-color: rgba(56, 189, 248, 0.22);
+  box-shadow: 0 0 30px var(--glass-glow), inset 0 0 30px var(--glass-glow);
+}
+.panel > h2 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--accent);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel > h2::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent), var(--cobalt));
+  flex-shrink: 0;
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* stagger each panel */
+.panel:nth-child(1) { animation-delay: 0.05s; }
+.panel:nth-child(2) { animation-delay: 0.10s; }
+.panel:nth-child(3) { animation-delay: 0.15s; }
+.panel:nth-child(4) { animation-delay: 0.20s; }
+.panel:nth-child(5) { animation-delay: 0.25s; }
+.panel:nth-child(6) { animation-delay: 0.30s; }
+.panel:nth-child(7) { animation-delay: 0.35s; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  background: rgba(11, 15, 25, 0.88);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid var(--glass-border);
+}
+header .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+header .logo-icon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--cobalt));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #ffffff;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.35);
+  animation: logoPulse 3s ease-in-out infinite;
+}
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(99, 102, 241, 0.3); }
+  50%      { box-shadow: 0 0 24px rgba(99, 102, 241, 0.55); }
+}
+header h1 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: var(--ink);
+}
+header h1 span {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 13px;
+  margin-left: 6px;
+}
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+#clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.6px;
+}
+.health {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.svc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: 0.3px;
+}
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.4s, box-shadow 0.4s;
+}
+.dot.up {
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+.dot.down {
+  background: var(--critical);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
+  50%      { box-shadow: 0 0 14px rgba(34, 197, 94, 0.7); }
+}
+
+/* ── Config bar ─────────────────────────────────────────────────────────── */
+.cfg {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  padding: 6px 24px;
+  background: rgba(6, 10, 20, 0.5);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.05);
+  letter-spacing: 0.3px;
+}
+
+/* ── Main grid ──────────────────────────────────────────────────────────── */
+main {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px 40px;
+  grid-template-columns: repeat(12, 1fr);
+}
+
+#inject-panel     { grid-column: span 12; }
+#topology-panel   { grid-column: span 7; }
+#predictions-panel { grid-column: span 5; }
+#incidents-panel  { grid-column: span 7; }
+#copilot-panel    { grid-column: span 5; }
+#events-panel     { grid-column: span 12; }
+
+@media (max-width: 960px) {
+  main > .panel { grid-column: 1 / -1 !important; }
+}
+
+/* ── Topology SVG ───────────────────────────────────────────────────────── */
+svg#topo-svg { width: 100%; height: auto; display: block; }
+.topo-link {
+  stroke: rgba(56, 189, 248, 0.15);
+  stroke-linecap: round;
+  transition: stroke 0.4s;
+}
+.topo-link.core { stroke-width: 3; stroke-dasharray: 8 4; animation: linkFlow 1.4s linear infinite; }
+.topo-link.access { stroke-width: 1.8; stroke-dasharray: 5 5; animation: linkFlow 2s linear infinite; }
+@keyframes linkFlow { to { stroke-dashoffset: -24; } }
+
+.topo-node { cursor: default; transition: filter 0.3s; }
+.topo-node:hover { filter: brightness(1.3) drop-shadow(0 0 8px var(--accent)); }
+.node-label {
+  fill: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.node-role {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* node severity halos */
+.node-halo { opacity: 0; transition: opacity 0.5s; }
+.node-halo.active { opacity: 1; animation: haloGlow 1.6s ease-in-out infinite; }
+@keyframes haloGlow {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+/* ── Prediction tiles ───────────────────────────────────────────────────── */
+.tiles { display: grid; gap: 8px; max-height: 400px; overflow-y: auto; }
+.tile {
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  transition: border-color 0.3s, transform 0.2s;
+}
+.tile:hover {
+  border-color: rgba(56, 189, 248, 0.25);
+  transform: translateX(3px);
+}
+.tile .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.tile .name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.tile .iface {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.tile .eta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+.meter {
+  height: 6px;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 99px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--cobalt), var(--accent));
+  transition: width 0.6s ease;
+}
+.meter > i.warn {
+  background: linear-gradient(90deg, var(--warning), var(--error));
+}
+.meter > i.crit {
+  background: linear-gradient(90deg, var(--error), var(--critical));
+}
+svg.spark { flex: 0 0 auto; }
+
+.eta-badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: rgba(245, 158, 11, 0.08);
+  animation: etaPulse 2s ease-in-out infinite;
+}
+@keyframes etaPulse {
+  0%, 100% { border-color: rgba(245, 158, 11, 0.2); }
+  50%      { border-color: rgba(245, 158, 11, 0.5); }
+}
+
+/* ── Severity chips ─────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+.chip::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.chip.ok        { border-color: rgba(16,185,129,0.3); }
+.chip.ok::before { background: var(--ok); box-shadow: 0 0 6px rgba(16,185,129,0.5); }
+.chip.info      { border-color: rgba(59,130,246,0.3); }
+.chip.info::before { background: var(--info); box-shadow: 0 0 6px rgba(59,130,246,0.5); }
+.chip.warning   { border-color: rgba(245,158,11,0.3); }
+.chip.warning::before { background: var(--warning); box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+.chip.error     { border-color: rgba(249,115,22,0.3); }
+.chip.error::before { background: var(--error); box-shadow: 0 0 6px rgba(249,115,22,0.5); }
+.chip.critical  { border-color: rgba(239,68,68,0.3); }
+.chip.critical::before { background: var(--critical); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+
+/* ── Incident cards ─────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--muted);
+  animation: cardSlide 0.35s ease-out both;
+  transition: border-color 0.3s;
+}
+.card:hover { border-left-color: var(--accent); }
+.card.sev-ok       { border-left-color: var(--ok); }
+.card.sev-info     { border-left-color: var(--info); }
+.card.sev-warning  { border-left-color: var(--warning); }
+.card.sev-error    { border-left-color: var(--error); }
+.card.sev-critical { border-left-color: var(--critical); }
+@keyframes cardSlide {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.card .head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.card .rc { font-weight: 600; font-size: 13px; }
+.card .rc b { color: var(--critical); }
+.card ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+}
+.card .rationale {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+  font-style: italic;
+}
+.card .cascade li {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 2px 0;
+  border-left: 2px solid var(--hair);
+  padding-left: 10px;
+  margin-left: -20px;
+  list-style: none;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+button {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  background: linear-gradient(135deg, var(--accent-dim), var(--cobalt));
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 16px;
+  letter-spacing: 0.3px;
+  transition: transform 0.15s, box-shadow 0.3s;
+}
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+}
+button:active { transform: translateY(0); }
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Copilot panel ──────────────────────────────────────────────────────── */
+#copilot-out {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: #cbd5e1;
+  background: rgba(11, 15, 25, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+#copilot-meta {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  font-size: 10px;
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+.cursor-blink::after {
+  content: "▊";
+  animation: blink 1s step-end infinite;
+  color: var(--cobalt);
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ── Event ticker ───────────────────────────────────────────────────────── */
+#events { max-height: 260px; overflow-y: auto; }
+.ev {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.04);
+  font-size: 12px;
+  animation: evIn 0.3s ease-out;
+  border-left: 3px solid transparent;
+  padding-left: 10px;
+  transition: background 0.2s;
+}
+.ev:hover { background: rgba(56, 189, 248, 0.03); }
+@keyframes evIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ev.sev-info     { border-left-color: var(--info); }
+.ev.sev-warning  { border-left-color: var(--warning); }
+.ev.sev-error    { border-left-color: var(--error); }
+.ev.sev-critical { border-left-color: var(--critical); }
+.ev .ts {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+.ev .node {
+  color: var(--accent);
+  font-weight: 600;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.ev .msg { color: var(--ink-2); }
+
+/* ── Fault injection ────────────────────────────────────────────────────── */
+.inject {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.inject select {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.3s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%2338bdf8' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+.inject select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+.inject button { margin-top: 0; padding: 8px 18px; font-size: 12px; }
+.inject button.secondary {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--glass-border);
+}
+.inject button.secondary:hover {
+  border-color: var(--accent);
+  box-shadow: none;
+  color: var(--ink);
+}
+.hint { color: var(--muted); font-size: 12px; }
+#active-faults { margin: 10px 0 4px; font-size: 12px; }
+#active-faults .fault { color: var(--ink-2); font-family: var(--font-mono); font-size: 12px; }
+#active-faults .fault b { color: var(--warning); }
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+h2 .toggle {
+  float: right;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+h2 .toggle input { vertical-align: middle; accent-color: var(--accent); }
+
+/* ── Tooltip ────────────────────────────────────────────────────────────── */
+.topo-tooltip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: rgba(6, 10, 20, 0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  display: none;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  max-width: 240px;
+  line-height: 1.5;
+}
+.topo-tooltip .tt-name { color: var(--accent); font-weight: 600; }
+.topo-tooltip .tt-detail { color: var(--muted); }
 </style>
 </head>
 <body>
+
+<!-- Particle network canvas -->
+<canvas id="net-bg"></canvas>
+
+<!-- Tooltip for topology nodes -->
+<div class="topo-tooltip" id="topo-tooltip"></div>
+
 <header>
-  <h1>DRISHTI <span>· Predictive NOC</span></h1>
-  <div class="health" id="health"></div>
+  <div class="logo">
+    <div class="logo-icon">D</div>
+    <h1>DRISHTI <span>· Predictive NOC</span></h1>
+  </div>
+  <div class="header-right">
+    <span id="clock"></span>
+    <div class="health" id="health"></div>
+  </div>
 </header>
 <div class="cfg" id="cfg"></div>
+
 <main>
   <section class="panel" id="inject-panel">
-    <h2>Fault injection</h2>
+    <h2>Fault Injection</h2>
     <div class="inject">
       <select id="inj-scenario" aria-label="scenario"></select>
       <select id="inj-node" aria-label="node"></select>
-      <button id="inj-go" type="button">Inject fault</button>
-      <button id="inj-clear" type="button" class="secondary">Clear all</button>
+      <button id="inj-go" type="button">⚡ Inject Fault</button>
+      <button id="inj-clear" type="button" class="secondary">Clear All</button>
       <span id="inj-status" class="hint"></span>
     </div>
     <div id="active-faults" class="hint">no active faults</div>
-    <p class="hint">Faults ramp gradually — watch <b>Predicted risk</b> climb, an <b>incident</b> appear and tint the map, then hit <b>Explain</b> for the copilot narrative.</p>
+    <p class="hint" style="margin-top:8px;">Faults ramp gradually — watch <b style="color:var(--accent)">Predicted Risk</b> climb, an <b style="color:var(--warning)">incident</b> appear and tint the topology, then hit <b style="color:var(--teal)">Explain</b> for the copilot narrative.</p>
   </section>
+
   <section class="panel" id="topology-panel">
-    <h2>Topology</h2>
+    <h2>Network Topology</h2>
     <div id="topology"><span class="empty">loading topology…</span></div>
   </section>
+
   <section class="panel" id="predictions-panel">
-    <h2>Predicted risk (ml)</h2>
+    <h2>Predicted Risk (ML)</h2>
     <div id="predictions" class="tiles"><span class="empty">—</span></div>
   </section>
+
   <section class="panel" id="incidents-panel">
     <h2>Incidents (RCA)</h2>
     <div id="incidents"><span class="empty">no active incidents</span></div>
   </section>
+
   <section class="panel" id="copilot-panel">
-    <h2>Copilot explanation
+    <h2>Copilot Explanation
       <label class="toggle"><input type="checkbox" id="autoexplain" checked> auto-explain</label>
     </h2>
     <div id="copilot-meta"></div>
     <div id="copilot-out"><span class="empty">select "Explain" on an incident</span></div>
   </section>
+
   <section class="panel" id="events-panel">
-    <h2>Live events</h2>
+    <h2>Live Events</h2>
     <div id="events"><span class="empty">waiting for telemetry…</span></div>
   </section>
 </main>
 
 <script type="module">
-// ---- service config (query-param overridable) ----------------------------
+// ═══════════════════════════════════════════════════════════════════════════
+// DRISHTI NOC — Full application logic
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Animated network background ────────────────────────────────────────────
+(function initNetworkBG() {
+  const canvas = document.getElementById("net-bg");
+  const ctx = canvas.getContext("2d");
+  let w, h, particles = [];
+  const COUNT = 60;
+  const MAX_DIST = 140;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  for (let i = 0; i < COUNT; i++) {
+    particles.push({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+      r: Math.random() * 1.5 + 0.5,
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    // draw connections
+    for (let i = 0; i < COUNT; i++) {
+      for (let j = i + 1; j < COUNT; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < MAX_DIST) {
+          const alpha = (1 - dist / MAX_DIST) * 0.2;
+          ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+    // draw nodes
+    for (const p of particles) {
+      ctx.fillStyle = "rgba(99, 102, 241, 0.4)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      // move
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString("en-GB", { hour12: false }) + " · " +
+    now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Service config ─────────────────────────────────────────────────────────
 const qs = new URLSearchParams(location.search);
 const SVC = {
-  backend: qs.get("backend") || "http://localhost:8000",
+  backend:   qs.get("backend")   || "http://localhost:8000",
   simulator: qs.get("simulator") || "http://localhost:8100",
-  ml: qs.get("ml") || "http://localhost:8200",
-  rca: qs.get("rca") || "http://localhost:8300",
-  copilot: qs.get("copilot") || "http://localhost:8400",
+  ml:        qs.get("ml")        || "http://localhost:8200",
+  rca:       qs.get("rca")       || "http://localhost:8300",
+  copilot:   qs.get("copilot")   || "http://localhost:8400",
 };
 document.getElementById("cfg").textContent =
-  `backend ${SVC.backend} · simulator ${SVC.simulator} · ml ${SVC.ml} · rca ${SVC.rca} · copilot ${SVC.copilot}`;
+  `backend ${SVC.backend}  ·  simulator ${SVC.simulator}  ·  ml ${SVC.ml}  ·  rca ${SVC.rca}  ·  copilot ${SVC.copilot}`;
 
-// ---- tiny DOM helper ------------------------------------------------------
+// ── DOM helpers ────────────────────────────────────────────────────────────
 function el(tag, props = {}, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -234,12 +794,14 @@ async function safeJson(url, opts = {}) {
   }
 }
 
-// ---- health strip ---------------------------------------------------------
+// ── Health strip ───────────────────────────────────────────────────────────
 const HEALTH = document.getElementById("health");
 function renderHealth(states) {
   HEALTH.replaceChildren(
     ...Object.entries(states).map(([name, up]) =>
-      el("div", { class: "svc" }, el("span", { class: `dot ${up ? "up" : "down"}` }), name)),
+      el("div", { class: "svc" },
+        el("span", { class: `dot ${up ? "up" : "down"}` }),
+        name)),
   );
 }
 async function pollHealth() {
@@ -248,11 +810,11 @@ async function pollHealth() {
   renderHealth(Object.fromEntries(names.map((n, i) => [n, results[i] != null])));
 }
 
-// ---- topology map ---------------------------------------------------------
+// ── Topology map ───────────────────────────────────────────────────────────
 const POS = {
-  "ce-site-a": [45, 60], "ce-site-b": [45, 190],
-  "pe-east": [190, 60], "pe-west": [190, 190],
-  "p-core-1": [345, 60], "p-core-2": [345, 190],
+  "ce-site-a": [70, 70],   "ce-site-b": [70, 230],
+  "pe-east":   [220, 70],  "pe-west":   [220, 230],
+  "p-core-1":  [400, 70],  "p-core-2":  [400, 230],
 };
 const SVGNS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs) {
@@ -260,7 +822,31 @@ function svgEl(tag, attrs) {
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
   return n;
 }
+
 let TOPOLOGY = null;
+const tooltip = document.getElementById("topo-tooltip");
+
+function nodeShape(role, cx, cy, r) {
+  // CE = rounded square, PE = circle, P = hexagon
+  if (role === "CE") {
+    const s = r * 1.6;
+    return svgEl("rect", {
+      x: cx - s/2, y: cy - s/2, width: s, height: s,
+      rx: 4, ry: 4,
+    });
+  } else if (role === "P") {
+    // hexagon
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 3 * i - Math.PI / 6;
+      pts.push(`${cx + r * 1.3 * Math.cos(a)},${cy + r * 1.3 * Math.sin(a)}`);
+    }
+    return svgEl("polygon", { points: pts.join(" ") });
+  }
+  // PE = circle (default)
+  return svgEl("circle", { cx, cy, r: r * 1.1 });
+}
+
 async function loadTopology() {
   const topo = await safeJson(`${SVC.backend}/topology`);
   if (!topo) return;
@@ -271,38 +857,125 @@ async function loadTopology() {
     for (const n of topo.nodes || []) nodeSel.append(el("option", { value: n.id }, n.id));
   }
 }
+
 function renderTopology(nodeState) {
   if (!TOPOLOGY) return;
-  const svg = svgEl("svg", { viewBox: "0 0 390 250", role: "img" });
+  const svg = svgEl("svg", { id: "topo-svg", viewBox: "0 0 470 300", role: "img" });
+
+  // defs for glow filters
+  const defs = svgEl("defs", {});
+  for (const [name, color] of [["glow-cyan","56,189,248"],["glow-green","34,197,94"],["glow-yellow","251,191,36"],["glow-orange","249,115,22"],["glow-red","239,68,68"]]) {
+    const f = svgEl("filter", { id: name, x: "-50%", y: "-50%", width: "200%", height: "200%" });
+    const gb = svgEl("feGaussianBlur", { stdDeviation: "4", result: "blur" });
+    const merge = svgEl("feMerge", {});
+    merge.append(svgEl("feMergeNode", { in: "blur" }));
+    merge.append(svgEl("feMergeNode", { in: "SourceGraphic" }));
+    f.append(gb, merge);
+    defs.append(f);
+  }
+  svg.append(defs);
+
+  // draw links
   for (const link of TOPOLOGY.links || []) {
     const a = POS[link.a?.node], b = POS[link.b?.node];
     if (!a || !b) continue;
+    const cls = link.kind === "core" ? "topo-link core" : "topo-link access";
     svg.append(svgEl("line", {
       x1: a[0], y1: a[1], x2: b[0], y2: b[1],
-      stroke: "var(--hair)", "stroke-width": link.kind === "core" ? 3 : 1.5,
+      class: cls,
     }));
   }
+
+  // draw tunnels as curved dashed lines
+  for (const tun of TOPOLOGY.tunnels || []) {
+    const a = POS[tun.src], b = POS[tun.dst];
+    if (!a || !b) continue;
+    const mx = (a[0] + b[0]) / 2;
+    const my = (a[1] + b[1]) / 2 + (tun.kind === "ipsec" ? 40 : -40);
+    svg.append(svgEl("path", {
+      d: `M${a[0]},${a[1]} Q${mx},${my} ${b[0]},${b[1]}`,
+      fill: "none",
+      stroke: "rgba(45, 212, 191, 0.15)",
+      "stroke-width": 1.5,
+      "stroke-dasharray": "4 4",
+      class: "topo-link access",
+    }));
+  }
+
+  // draw nodes
   for (const node of TOPOLOGY.nodes || []) {
     const p = POS[node.id];
     if (!p) continue;
     const st = nodeState[node.id] || {};
-    const fill = st.severity ? `var(--${sevClass(st.severity)})` : "var(--surface-2)";
+    const sev = st.severity;
+    const g = svgEl("g", { class: "topo-node" });
+
+    // severity halo
+    const haloColor = sev ? `var(--${sevClass(sev)})` : "transparent";
+    const halo = svgEl("circle", {
+      cx: p[0], cy: p[1], r: 26,
+      fill: "none",
+      stroke: haloColor,
+      "stroke-width": 2,
+      class: `node-halo${sev ? " active" : ""}`,
+      opacity: sev ? "0.6" : "0",
+    });
+    g.append(halo);
+
+    // root-cause ring
     if (st.root) {
-      svg.append(svgEl("circle", { cx: p[0], cy: p[1], r: 18, fill: "none",
-        stroke: "var(--ring)", "stroke-width": 2 }));
+      g.append(svgEl("circle", {
+        cx: p[0], cy: p[1], r: 22,
+        fill: "none",
+        stroke: "#fff",
+        "stroke-width": 2,
+        "stroke-dasharray": "4 3",
+        opacity: "0.7",
+      }));
     }
-    svg.append(svgEl("circle", { cx: p[0], cy: p[1], r: 13, fill,
-      stroke: "var(--hair)", "stroke-width": 1 }));
-    const label = svgEl("text", { x: p[0], y: p[1] + 28, "text-anchor": "middle", class: "node-label" });
+
+    // node shape
+    const shape = nodeShape(node.role, p[0], p[1], 14);
+    const fill = sev ? `var(--${sevClass(sev)})` : "rgba(18, 28, 50, 0.9)";
+    shape.setAttribute("fill", fill);
+    shape.setAttribute("stroke", sev ? `var(--${sevClass(sev)})` : "rgba(56, 189, 248, 0.3)");
+    shape.setAttribute("stroke-width", "1.5");
+    if (sev) {
+      const glowMap = { info: "glow-cyan", warning: "glow-yellow", error: "glow-orange", critical: "glow-red" };
+      shape.setAttribute("filter", `url(#${glowMap[sevClass(sev)] || "glow-cyan"})`);
+    }
+    g.append(shape);
+
+    // label
+    const label = svgEl("text", { x: p[0], y: p[1] + 34, "text-anchor": "middle", class: "node-label" });
     label.textContent = node.id;
-    svg.append(label);
+    g.append(label);
+
+    // role tag
+    const role = svgEl("text", { x: p[0], y: p[1] + 43, "text-anchor": "middle", class: "node-role" });
+    role.textContent = node.role;
+    g.append(role);
+
+    // tooltip on hover
+    g.addEventListener("mouseenter", (e) => {
+      tooltip.innerHTML = `<span class="tt-name">${node.name || node.id}</span><br>`
+        + `<span class="tt-detail">Role: ${node.role} · Site: ${node.site || "—"}</span><br>`
+        + `<span class="tt-detail">Loopback: ${node.loopback || "—"}</span>`;
+      tooltip.style.display = "block";
+    });
+    g.addEventListener("mousemove", (e) => {
+      tooltip.style.left = e.clientX + 14 + "px";
+      tooltip.style.top = e.clientY + 14 + "px";
+    });
+    g.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+
+    svg.append(g);
   }
+
   document.getElementById("topology").replaceChildren(svg);
 }
 
-// ---- predictions ----------------------------------------------------------
-// ml serves only the current snapshot, so we keep a short client-side history
-// per node/interface to visualise the (transient) precursor spike as a trend.
+// ── Predictions ────────────────────────────────────────────────────────────
 const HIST_LEN = 40;
 const riskHistory = new Map();
 function recordRisk(key, prob) {
@@ -320,24 +993,30 @@ function sparkline(values) {
   const pts = values.map((v, i) =>
     `${(i / (n - 1) * w).toFixed(1)},${(h - (v / peak) * (h - 3) - 1.5).toFixed(1)}`).join(" ");
   const cur = values[n - 1];
-  const stroke = cur >= 0.5 ? "var(--critical)" : cur >= 0.15 ? "var(--warning)" : "var(--seq)";
-  svg.append(svgEl("polyline", { points: pts, fill: "none", stroke, "stroke-width": 1.5 }));
+  const stroke = cur >= 0.5 ? "var(--critical)" : cur >= 0.15 ? "var(--warning)" : "var(--accent)";
+  svg.append(svgEl("polyline", { points: pts, fill: "none", stroke, "stroke-width": 1.5, "stroke-linecap": "round", "stroke-linejoin": "round" }));
+  // glow version behind
+  svg.insertBefore(svgEl("polyline", { points: pts, fill: "none", stroke, "stroke-width": 3, opacity: "0.2", "stroke-linecap": "round" }), svg.firstChild);
   return svg;
 }
+
 async function refreshPredictions() {
   const box = document.getElementById("predictions");
   const preds = await safeJson(`${SVC.ml}/predictions`);
   if (preds == null) { box.replaceChildren(el("span", { class: "empty" }, "ml service offline")); return; }
   const withProb = preds.filter((p) => typeof p.precursor_probability === "number");
   if (!withProb.length) { box.replaceChildren(el("span", { class: "empty" }, "no risk signals yet")); return; }
-  // record history for EVERY interface so trends persist even when one drops out of the top 8
   for (const p of withProb) recordRisk(`${p.node_id}|${p.interface || ""}`, p.precursor_probability);
   withProb.sort((a, b) => b.precursor_probability - a.precursor_probability);
   box.replaceChildren(...withProb.slice(0, 8).map((p) => {
     const pct = Math.round(p.precursor_probability * 100);
     const eta = p.estimated_seconds_to_impact == null ? "—" : `${Math.round(p.estimated_seconds_to_impact)}s`;
     const meter = el("div", { class: "meter" });
-    const fill = el("i"); fill.style.width = `${pct}%`; meter.append(fill);
+    const fill = el("i");
+    fill.style.width = `${pct}%`;
+    if (pct >= 70) fill.className = "crit";
+    else if (pct >= 40) fill.className = "warn";
+    meter.append(fill);
     const hist = riskHistory.get(`${p.node_id}|${p.interface || ""}`) || [];
     return el("div", { class: "tile" },
       el("div", { class: "row" },
@@ -348,9 +1027,10 @@ async function refreshPredictions() {
   return withProb;
 }
 
-// ---- incidents ------------------------------------------------------------
+// ── Incidents ──────────────────────────────────────────────────────────────
 function severityRank(s) { return SEV.indexOf(s); }
 const autoExplained = new Set();
+
 async function refreshIncidents() {
   const box = document.getElementById("incidents");
   const incidents = await safeJson(`${SVC.rca}/incidents`);
@@ -363,16 +1043,13 @@ async function refreshIncidents() {
     box.replaceChildren(...incidents.map((inc) => renderIncident(inc, nodeState)));
     maybeAutoExplain(incidents);
   }
-  // fold predictions into topology tint too
   const preds = await refreshPredictions();
   for (const p of preds || []) {
     if (p.precursor_probability >= 0.5 && !nodeState[p.node_id]) nodeState[p.node_id] = { severity: "warning" };
   }
   renderTopology(nodeState);
 }
-// Auto-explain the top incident the first time we see it, so the copilot
-// narrative is already on screen without a click. Deterministic incident ids
-// mean each is explained at most once.
+
 function maybeAutoExplain(incidents) {
   if (!document.getElementById("autoexplain")?.checked) return;
   const rank = (i) => severityRank(i.severity || "info");
@@ -382,12 +1059,14 @@ function maybeAutoExplain(incidents) {
     explainIncident(top, null);
   }
 }
+
 function incidentEta(inc) {
   const etas = [];
   for (const s of inc.symptoms || []) if (typeof s.estimated_seconds_to_impact === "number") etas.push(s.estimated_seconds_to_impact);
   for (const c of inc.cascade || []) if (typeof c.estimated_seconds_to_impact === "number") etas.push(c.estimated_seconds_to_impact);
   return etas.length ? Math.min(...etas) : null;
 }
+
 function renderIncident(inc, nodeState) {
   const rc = inc.root_cause || {};
   const sev = sevClass(inc.severity);
@@ -401,8 +1080,8 @@ function renderIncident(inc, nodeState) {
     el("span", { class: `chip ${sev}` }, inc.severity || "info"),
     el("span", { class: "rc", html: `root cause: <b>${rc.node_id ?? "?"}</b> · confidence ${conf}` }));
   const eta = incidentEta(inc);
-  if (eta != null) head.append(el("span", { class: "eta-badge" }, `predicted impact in ~${Math.round(eta)}s`));
-  const card = el("div", { class: "card" },
+  if (eta != null) head.append(el("span", { class: "eta-badge" }, `impact ~${Math.round(eta)}s`));
+  const card = el("div", { class: `card sev-${sev}` },
     head,
     el("div", { class: "rationale" }, (rc.rationale || []).join(" · ")),
   );
@@ -414,44 +1093,57 @@ function renderIncident(inc, nodeState) {
     }
     card.append(ul);
   }
-  const btn = el("button", { onclick: () => explainIncident(inc, btn) }, "Explain");
+  const btn = el("button", { onclick: () => explainIncident(inc, btn) }, "⚡ Explain");
   card.append(btn);
   return card;
 }
 
-// ---- copilot --------------------------------------------------------------
+// ── Copilot ────────────────────────────────────────────────────────────────
 let explaining = false;
 async function explainIncident(inc, btn) {
   const meta = document.getElementById("copilot-meta");
   const out = document.getElementById("copilot-out");
   explaining = true;
   if (btn) { btn.disabled = true; btn.textContent = "Explaining…"; }
-  meta.textContent = `explaining ${inc.incident_id}…`;
+  meta.textContent = `▸ explaining ${inc.incident_id}…`;
   out.textContent = "";
+  out.classList.add("cursor-blink");
   const res = await safeJson(`${SVC.copilot}/explain`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ incident: inc }),
   });
   explaining = false;
-  if (btn) { btn.disabled = false; btn.textContent = "Explain"; }
+  out.classList.remove("cursor-blink");
+  if (btn) { btn.disabled = false; btn.textContent = "⚡ Explain"; }
   if (res == null) { meta.textContent = ""; out.replaceChildren(el("span", { class: "empty" }, "copilot service offline")); return; }
   const rbs = (res.retrieved_runbooks || []).map((r) => `${r.runbook}#${r.heading}`).join(", ");
-  meta.textContent = `${inc.incident_id} · model ${res.model} · ${res.llm_available ? "LLM" : "templated fallback"}`
+  meta.textContent = `▸ ${inc.incident_id} · model: ${res.model} · ${res.llm_available ? "LLM" : "templated fallback"}`
     + (rbs ? ` · runbooks: ${rbs}` : "");
-  out.textContent = res.narrative || "(no narrative)";
+  // typewriter effect
+  const narrative = res.narrative || "(no narrative)";
+  out.textContent = "";
+  let idx = 0;
+  function typeChar() {
+    if (idx < narrative.length) {
+      out.textContent += narrative[idx];
+      idx++;
+      setTimeout(typeChar, 6);
+    }
+  }
+  typeChar();
 }
 
-// ---- live events ----------------------------------------------------------
+// ── Live events ────────────────────────────────────────────────────────────
 const EVENTS = document.getElementById("events");
 const evBuf = [];
 function pushEvent(ev) {
   evBuf.unshift(ev);
   if (evBuf.length > 50) evBuf.pop();
-  EVENTS.replaceChildren(...evBuf.map((e) => el("div", { class: "ev" },
-    el("span", { class: `evdot ${sevClass(e.severity)}` }),
-    el("span", { class: "ts" }, (e.ts || "").slice(11, 19)),
-    el("span", { class: "node" }, e.node_id || ""),
-    el("span", { class: "msg" }, e.message || ""))));
+  EVENTS.replaceChildren(...evBuf.map((e) =>
+    el("div", { class: `ev sev-${sevClass(e.severity)}` },
+      el("span", { class: "ts" }, (e.ts || "").slice(11, 19)),
+      el("span", { class: "node" }, e.node_id || ""),
+      el("span", { class: "msg" }, e.message || ""))));
 }
 let ws = null, wsBackoff = 1, pollTimer = null;
 function connectEvents() {
@@ -477,7 +1169,7 @@ function schedulePoll() {
   pollTimer = setInterval(poll, 5000);
 }
 
-// ---- fault injection ------------------------------------------------------
+// ── Fault injection ────────────────────────────────────────────────────────
 async function loadScenarios() {
   const sel = document.getElementById("inj-scenario");
   const scenarios = await safeJson(`${SVC.simulator}/scenarios`);
@@ -501,28 +1193,26 @@ async function injectFault() {
   const node_id = document.getElementById("inj-node").value;
   if (!scenario || !node_id) { status.textContent = "pick a scenario and node"; return; }
   go.disabled = true; status.textContent = `injecting ${scenario} on ${node_id}…`;
-  // A brisk ramp so the precursor signal is visible during a live demo.
   const res = await safeJson(`${SVC.simulator}/faults`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario, node_id, params: { ramp_seconds: 15, hold_seconds: 600 } }),
   });
   go.disabled = false;
-  status.textContent = res ? `injected ${res.fault_id} — watch the panels update` : "simulator unreachable";
+  status.textContent = res ? `✓ injected ${res.fault_id} — watch the panels update` : "simulator unreachable";
   refreshFaults();
 }
 async function clearFaults() {
   const status = document.getElementById("inj-status");
   await safeJson(`${SVC.simulator}/faults`, { method: "DELETE" });
-  // also flush rca so lingering (decaying) incidents clear immediately
   await safeJson(`${SVC.rca}/admin/reset`, { method: "POST" });
   autoExplained.clear();
-  status.textContent = "cleared all faults + reset incidents";
+  status.textContent = "✓ cleared all faults + reset incidents";
   refreshFaults();
 }
 document.getElementById("inj-go").addEventListener("click", injectFault);
 document.getElementById("inj-clear").addEventListener("click", clearFaults);
 
-// ---- boot -----------------------------------------------------------------
+// ── Boot ───────────────────────────────────────────────────────────────────
 loadTopology();
 loadScenarios();
 pollHealth();
